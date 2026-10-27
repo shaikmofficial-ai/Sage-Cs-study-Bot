@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sage – CS Study Buddy</title>
+<style>
+  :root { --bg:#f6f7fb; --card:#fff; --text:#1c1f2a; --accent:#4f46e5; --bot:#eef0f7; --err:#b42318; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f1117; --card:#181b24; --text:#e7e9f0; --bot:#252937; --err:#ff8b7e; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--text); display:flex; justify-content:center; }
+  main { width:100%; max-width:720px; height:100dvh; display:flex; flex-direction:column; background:var(--card); }
+  header { padding:14px 18px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--bot); }
+  header h1 { font-size:1.05rem; margin:0; }
+  #log { flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:10px; }
+  .msg { max-width:85%; padding:10px 14px; border-radius:14px; white-space:pre-wrap; line-height:1.45; }
+  .user { align-self:flex-end; background:var(--accent); color:#fff; }
+  .bot { align-self:flex-start; background:var(--bot); }
+  .error { align-self:flex-start; background:transparent; color:var(--err); border:1px solid var(--err); }
+  form { display:flex; gap:8px; padding:14px; border-top:1px solid var(--bot); }
+  input { flex:1; padding:11px 14px; border-radius:10px; border:1px solid var(--bot); background:var(--bg); color:var(--text); font-size:1rem; }
+  button { padding:10px 16px; border:0; border-radius:10px; background:var(--accent); color:#fff; font-size:.95rem; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--text); border:1px solid var(--bot); }
+  button:disabled { opacity:.6; cursor:wait; }
+</style>
+</head>
+<body>
+<main>
+  <header><h1>Sage · CS Study Buddy</h1><button class="ghost" id="reset" type="button">New chat</button></header>
+  <div id="log"><div class="msg bot">Hi! I'm Sage. Ask me anything about programming, CS or AI/ML.</div></div>
+  <form id="form">
+    <input id="input" placeholder="Type your question…" autocomplete="off" maxlength="2000" autofocus>
+    <button id="send">Send</button>
+  </form>
+</main>
+<script>
+  const log = document.getElementById("log"), form = document.getElementById("form"),
+        input = document.getElementById("input"), send = document.getElementById("send");
+  let conversationId = null;
+
+  function add(text, cls) {
+    const d = document.createElement("div");
+    d.className = "msg " + cls; d.textContent = text;   // textContent => no HTML injection
+    log.appendChild(d); log.scrollTop = log.scrollHeight; return d;
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const message = input.value.trim();
+    if (!message) return;
+    add(message, "user"); input.value = ""; send.disabled = true;
+    const typing = add("Thinking…", "bot");
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({conversation_id: conversationId, message})
+      });
+      const data = await res.json();
+      typing.remove();
+      if (!res.ok) { add(data.error || "Something went wrong.", "error"); }
+      else { conversationId = data.conversation_id; add(data.reply, "bot"); }
+    } catch (err) {
+      typing.remove(); add("Can't reach the server. Is it running?", "error");
+    } finally { send.disabled = false; input.focus(); }
+  });
+
+  document.getElementById("reset").addEventListener("click", async () => {
+    if (conversationId) await fetch("/api/reset", {method: "POST",
+      headers: {"Content-Type": "application/json"}, body: JSON.stringify({conversation_id: conversationId})});
+    conversationId = null; log.innerHTML = ""; add("New chat started. What would you like to learn?", "bot");
+  });
+</script>
+</body>
+</html>
